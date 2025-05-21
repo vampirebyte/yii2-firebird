@@ -8,7 +8,7 @@
 $config = [
     'databases' => [
         'firebird' => [
-            'dsn'      => 'firebird:dbname=localhost:/tmp/TEST.FDB;charset=ISO8859_1',
+            'dsn'      => 'firebird:dbname=localhost:/var/lib/firebird/data/TEST.FDB;charset=UTF8',
             'username' => 'SYSDBA',
             'password' => 'masterkey',
             'fixture'  => __DIR__ . '/source.sql',

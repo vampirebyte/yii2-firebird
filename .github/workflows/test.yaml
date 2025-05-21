@@ -1,0 +1,70 @@
+name: Test Suite
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - README.md
+  pull_request:
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+    services:
+      firebird:
+        image: >-
+          ${{ (matrix.fb == '3.0' && 'firebirdsql/firebird:3') ||
+             (matrix.fb == '4.0' && 'firebirdsql/firebird:4') }}
+        ports:
+          - 3050:3050
+        env:
+          FIREBIRD_ROOT_PASSWORD: masterkey
+          FIREBIRD_DATABASE: TEST.FDB
+          FIREBIRD_DATABASE_DEFAULT_CHARSET: UTF8
+          FIREBIRD_CONF_DataTypeCompatibility: ${{ matrix.fb == '3.0' && '2.5' || '' }}
+
+    strategy:
+      matrix:
+        php: ['5.6', '7.0', '7.4', '8.0', '8.1', '8.2', 'nightly']
+        fb: ['3.0', '4.0']
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: xdebug
+          extensions: pdo, pdo_firebird
+          tools: composer:v1
+
+      - name: Install Firebird client and dev files
+        run: |
+          sudo apt-get install -y firebird-utils firebird-dev
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: |
+          composer self-update
+          composer global require "fxp/composer-asset-plugin:~1.4.6" --prefer-dist --no-interaction
+          composer install --prefer-dist --no-interaction
+          composer require "phpunit/php-invoker" --dev --prefer-dist --no-interaction
+
+      - name: Run PHPUnit
+        env:
+          PHPUNIT_FLAGS: ${{ (matrix.php == '7.0' && matrix.fb == '3.0' && '--coverage-clover=coverage.clover') || '' }}
+        run: vendor/bin/phpunit --verbose $PHPUNIT_FLAGS --enforce-time-limit
+
+      - name: Upload Code Coverage
+        if: matrix.php == '7.0' && matrix.fb == '3.0'
+        uses: codecov/codecov-action@v3
